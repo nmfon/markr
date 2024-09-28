@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import psycopg2
+import statistics
 import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
@@ -106,6 +107,83 @@ def import_data():
 
     except ET.ParseError:
         return jsonify({"error": "Failed to parse XML"}), 400
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Fetch aggregate results of a test endpoint
+@app.route('/results/<int:test_id>/aggregate', methods=['GET'])
+def aggregate_results(test_id):
+    try:
+        # Connect to the database
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            # Fetch test by test_id
+            cur.execute("SELECT test_id, marks_available FROM tests WHERE test_id = %s", (test_id,))
+            test = cur.fetchone()
+
+            # Fetch results by test_id
+            cur.execute("SELECT test_id, student_number, marks_obtained FROM results WHERE test_id = %s", (test_id,))
+            results = cur.fetchall()
+
+        except Exception as e:
+            raise e  # Re-raise the exception to return an error response
+
+        finally:
+            # Close cursor and connection
+            cur.close()
+            conn.close()
+
+        # Check if test was found
+        if test:
+            marks_available = test[1]
+        else:
+            return jsonify({"error": "Test not found"}), 404
+
+        # Check if any results were found
+        if results:
+            marks = [item[2] for item in results]
+
+            min_mark = min(marks) / marks_available * 100
+            max_mark = max(marks) / marks_available * 100
+
+            mean = statistics.mean(marks) / marks_available * 100
+
+            # Calculate standard deviation (requires 2 or more results)
+            if len(results) >= 2:
+                standard_deviation = statistics.stdev(marks) / marks_available * 100
+            else:
+                standard_deviation = 0.0
+
+            # Calculate percentiles (requires 2 or more results)
+            if len(results) >= 2 :
+                percentiles = statistics.quantiles(marks)
+
+                percentile25 = percentiles[0] / marks_available * 100
+                percentile50 = percentiles[1] / marks_available * 100
+                percentile75 = percentiles[2] / marks_available * 100
+            else:
+                percentile25 = 0.0
+                percentile50 = 0.0
+                percentile75 = 0.0
+
+            # Return aggregate results as a JSON response
+            return jsonify([
+                {
+                    "mean": round(mean, 1),
+                    "stddev": round(standard_deviation, 1),
+                    "min": round(min_mark, 1),
+                    "max": round(max_mark, 1),
+                    "p25": round(percentile25, 1),
+                    "p50": round(percentile50, 1),
+                    "p75": round(percentile75, 1),
+                    "count": len(results)
+                }
+            ]), 200
+        else:
+            return jsonify({"error": "No results found"}), 404
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
