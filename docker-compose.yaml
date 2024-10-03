@@ -6,7 +6,10 @@ services:
     ports:
       - "4567:5000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/markr
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
     depends_on:
       - db
 
