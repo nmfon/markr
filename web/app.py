@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import os
 import psycopg2
 import statistics
 import xml.etree.ElementTree as ET
@@ -8,10 +9,10 @@ app = Flask(__name__)
 # Database connection function
 def get_db_connection():
     conn = psycopg2.connect(
-        dbname='markr',
-        user='postgres',
-        password='password',
-        host='db'
+        dbname=os.getenv('DATABASE_NAME'),
+        user=os.getenv('DATABASE_USER'),
+        password=os.getenv('DATABASE_PASSWORD'),
+        host=os.getenv('DATABASE_HOST')
     )
     return conn
 
