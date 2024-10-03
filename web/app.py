@@ -166,9 +166,9 @@ def aggregate_results(test_id):
                 percentile50 = percentiles[1] / marks_available * 100
                 percentile75 = percentiles[2] / marks_available * 100
             else:
-                percentile25 = 0.0
-                percentile50 = 0.0
-                percentile75 = 0.0
+                percentile25 = marks[0]
+                percentile50 = marks[0]
+                percentile75 = marks[0]
 
             # Return aggregate results as a JSON response
             return jsonify([
