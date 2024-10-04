@@ -1,10 +1,13 @@
 from flask import Flask, request, jsonify
+import json
+import logging
 import os
 import psycopg2
 import statistics
 import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
 
 # Database connection function
 def get_db_connection():
@@ -19,6 +22,7 @@ def get_db_connection():
 # Health check
 @app.route('/health')
 def index():
+    app.logger.info('%s: service is up', request.path)
     return jsonify({"message": "Service is up"})
 
 # Test database connection
@@ -30,17 +34,20 @@ def dbtest():
     db_version = cur.fetchone()
     cur.close()
     conn.close()
+    app.logger.info('%s: db is up', request.path)
     return jsonify({"PostgreSQL Version": db_version})
 
 # Import XML data endpoint with atomic database writes
 @app.route('/import', methods=['POST'])
 def import_data():
     if not request.data:
-        return jsonify({"error": "No data received"}), 400
+        app.logger.error('%s: no data received to import', request.path)
+        return jsonify({"error": "No data received to import"}), 400
 
     try:
         # Parse the XML data
         root = ET.fromstring(request.data)
+        app.logger.info('%s: parsed xml data for import', request.path)
 
         # Extract records from the XML
         records = []
@@ -54,12 +61,23 @@ def import_data():
             records.append((first_name, last_name, student_number, test_id, marks_available, marks_obtained))
 
         # Open a database connection and start a transaction
+        app.logger.info('%s: opening connection to database', request.path)
         conn = get_db_connection()
         cur = conn.cursor()
+        app.logger.info('%s: connected to database', request.path)
 
         try:
             # Begin transaction
             for record in records:
+                app.logger.info('%s: starting import of record into db %s', request.path, json.dumps({
+                    "first_name":record[0],
+                    "last_name":record[1],
+                    "student_number":record[2],
+                    "test_id":record[3],
+                    "marks_available":record[4],
+                    "marks_obtained":record[5]
+                }))
+
                 cur.execute(
                     """
                     INSERT INTO students (first_name, last_name, student_number)
@@ -94,6 +112,15 @@ def import_data():
             # Commit transaction if all queries succeed
             conn.commit()
 
+            app.logger.info('%s: finished import of record into db %s', request.path, json.dumps({
+                 "first_name":record[0],
+                 "last_name":record[1],
+                 "student_number":record[2],
+                 "test_id":record[3],
+                 "marks_available":record[4],
+                 "marks_obtained":record[5]
+            }))
+
         except Exception as e:
             # Rollback transaction if any error occurs
             conn.rollback()
@@ -101,15 +128,19 @@ def import_data():
 
         finally:
             # Close cursor and connection
+            app.logger.info('%s: closing connection to database', request.path)
             cur.close()
             conn.close()
+            app.logger.info('%s: disconnected from database', request.path)
 
         return jsonify({"message": "Records upserted successfully", "processed_records": len(records)}), 201
 
     except ET.ParseError:
+        app.logger.error('%s: failed to parse xml for import', request.path)
         return jsonify({"error": "Failed to parse XML"}), 400
 
     except Exception as e:
+        app.logger.error('%s: %s', request.path, str(e))
         return jsonify({"error": str(e)}), 500
 
 # Fetch aggregate results of a test endpoint
@@ -117,15 +148,19 @@ def import_data():
 def aggregate_results(test_id):
     try:
         # Connect to the database
+        app.logger.info('%s: opening connection to database', request.path)
         conn = get_db_connection()
         cur = conn.cursor()
+        app.logger.info('%s: connected to database', request.path)
 
         try:
             # Fetch test by test_id
+            app.logger.info('%s: fetching test %s', request.path, test_id)
             cur.execute("SELECT test_id, marks_available FROM tests WHERE test_id = %s", (test_id,))
             test = cur.fetchone()
 
             # Fetch results by test_id
+            app.logger.info('%s: fetching results for test %s', request.path, test_id)
             cur.execute("SELECT test_id, student_number, marks_obtained FROM results WHERE test_id = %s", (test_id,))
             results = cur.fetchall()
 
@@ -134,17 +169,22 @@ def aggregate_results(test_id):
 
         finally:
             # Close cursor and connection
+            app.logger.info('%s: closing connection to database', request.path)
             cur.close()
             conn.close()
+            app.logger.info('%s: disconnected from database', request.path)
 
         # Check if test was found
         if test:
+            app.logger.info('%s: found test %s', request.path, test_id)
             marks_available = test[1]
         else:
+            app.logger.error('%s: test %s not found', request.path, test_id)
             return jsonify({"error": "Test not found"}), 404
 
         # Check if any results were found
         if results:
+            app.logger.info('%s: found %s results for test %s', request.path, len(results), test_id)
             marks = [item[2] for item in results]
 
             min_mark = min(marks) / marks_available * 100
@@ -184,9 +224,11 @@ def aggregate_results(test_id):
                 }
             ]), 200
         else:
+            app.logger.error('%s: no results found for test %s', request.path, test_id)
             return jsonify({"error": "No results found"}), 404
 
     except Exception as e:
+        app.logger.error('%s: %s', request.path, str(e))
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
