@@ -52,6 +52,46 @@ def test_import_data_valid(client, mock_db_conn):
     assert data['message'] == 'Records upserted successfully'
     assert data['processed_records'] == 1
 
+# Test /import endpoint with large student id (mocking DB)
+def test_import_data_valid_large_student_id(client, mock_db_conn):
+    mock_cursor = mock_db_conn.return_value.cursor.return_value
+    xml_data = """
+    <results>
+        <mcq-test-result>
+            <first-name>Bob</first-name>
+            <last-name>Smith</last-name>
+            <student-number>123456789000000000</student-number>
+            <test-id>1</test-id>
+            <summary-marks available="100" obtained="80" />
+        </mcq-test-result>
+    </results>
+    """
+    response = client.post('/import', data=xml_data, content_type='application/xml')
+    assert response.status_code == 201
+    data = json.loads(response.data)
+    assert data['message'] == 'Records upserted successfully'
+    assert data['processed_records'] == 1
+
+# Test /import endpoint with large test id (mocking DB)
+def test_import_data_valid_large_test_id(client, mock_db_conn):
+    mock_cursor = mock_db_conn.return_value.cursor.return_value
+    xml_data = """
+    <results>
+        <mcq-test-result>
+            <first-name>Bob</first-name>
+            <last-name>Smith</last-name>
+            <student-number>456</student-number>
+            <test-id>999999999999999999</test-id>
+            <summary-marks available="100" obtained="80" />
+        </mcq-test-result>
+    </results>
+    """
+    response = client.post('/import', data=xml_data, content_type='application/xml')
+    assert response.status_code == 201
+    data = json.loads(response.data)
+    assert data['message'] == 'Records upserted successfully'
+    assert data['processed_records'] == 1
+
 # Test /import endpoint with invalid XML
 def test_import_data_invalid_xml(client):
     invalid_xml_data = "<invalid-xml>"
