@@ -41,6 +41,8 @@ The above design and technologies have been chosen to ensure the solution is:
 
 Ensure you have the following packages installed on your local machine:
 
+- docker
+- docker-compose
 - git
 - python3
 - pytest
@@ -73,6 +75,7 @@ docker compose down -v
 To run the included test suite:
 
 ```bash
+pip install --user -r web/requirements.txt
 pip install --user -r web/requirements-test.txt
 pytest -v --cov web
 ```
