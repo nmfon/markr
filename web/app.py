@@ -89,13 +89,17 @@ def import_data():
                 )
                 cur.execute(
                     """
-                    INSERT INTO tests (test_id, marks_available)
-                    VALUES (%s, %s)
+                    INSERT INTO tests (test_id, marks_available, results_count, marks_sum, marks_variance, marks_stddev)
+                    VALUES (%s, %s, 1, %s, 0, 0)
                     ON CONFLICT (test_id)
-                    DO UPDATE SET marks_available = EXCLUDED.marks_available
-                    WHERE tests.marks_available < EXCLUDED.marks_available
+                    DO UPDATE SET
+                        marks_available = GREATEST(marks_available, EXCLUDED.marks_available),
+                        results_count = results_count + 1,
+                        marks_sum = marks_sum + %s,
+                        marks_variance = ((results_count * marks_variance) + (%s - (marks_sum / results_count)) * (%s - (EXCLUDED.marks_sum / EXCLUDED.results_count))) / EXCLUDED.results_count,
+                        marks_stddev = sqrt(EXCLUDED.marks_variance)
                     """,
-                    (record[3], record[4])
+                    (record[3], record[4], record[5], record[5], record[5], record[5])
                 )
                 cur.execute(
                     """
